@@ -1,5 +1,10 @@
 pipeline {
   agent any
+  environment {
+    DOCKER_IMAGE = "abbasnaqvi/demo-micro-app:${build_version}"
+    REGISTRY_CREDENTIALS = credentials('dockerhub')  // Jenkins credentials ID for Docker Hub
+    DOCKER_REGISTRY = 'docker.io'  // Assuming you're using Docker Hub, change if using another registry
+  }
   parameters {
     string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version to use for Docker image')
   }
@@ -28,9 +33,10 @@ pipeline {
             dir('services/cart') {
               script {
                 def VERSION = params.build_version
-                docker.build("${DOCKER_REGISTRY}/cart-service:${VERSION}")
-                docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS_ID) {
-                  docker.image("${DOCKER_REGISTRY}/cart-service:${VERSION}").push()
+                def DOCKER_IMAGE_CART = "${DOCKER_REGISTRY}/cart-service:${VERSION}"
+                docker.build(DOCKER_IMAGE_CART)
+                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
+                  docker.image(DOCKER_IMAGE_CART).push()
                 }
               }
             }
@@ -42,9 +48,10 @@ pipeline {
             dir('services/payment') {
               script {
                 def VERSION = params.build_version
-                docker.build("${DOCKER_REGISTRY}/payment-service:${VERSION}")
-                docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS_ID) {
-                  docker.image("${DOCKER_REGISTRY}/payment-service:${VERSION}").push()
+                def DOCKER_IMAGE_PAYMENT = "${DOCKER_REGISTRY}/payment-service:${VERSION}"
+                docker.build(DOCKER_IMAGE_PAYMENT)
+                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
+                  docker.image(DOCKER_IMAGE_PAYMENT).push()
                 }
               }
             }
@@ -56,9 +63,10 @@ pipeline {
             dir('services/request') {
               script {
                 def VERSION = params.build_version
-                docker.build("${DOCKER_REGISTRY}/request-service:${VERSION}")
-                docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS_ID) {
-                  docker.image("${DOCKER_REGISTRY}/request-service:${VERSION}").push()
+                def DOCKER_IMAGE_REQUEST = "${DOCKER_REGISTRY}/request-service:${VERSION}"
+                docker.build(DOCKER_IMAGE_REQUEST)
+                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
+                  docker.image(DOCKER_IMAGE_REQUEST).push()
                 }
               }
             }
