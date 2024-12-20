@@ -2,16 +2,12 @@ pipeline {
   agent any
   parameters {
     string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version to use for Docker image')
-  }
-  
-  stages {
-    stage('Checkout') {
-      steps {
-        git branch: 'master', url: 'https://github.com/AbuAbbasNaqvi/demo-java-app-ci.git'
-        sh 'ls -al'  // Verify the presence of package.json
-      }
-    }
-
+  } 
+  checkout scm: [
+    $class: 'GitSCM', 
+    branches: [[name: '*/master']], 
+    userRemoteConfigs: [[url: 'https://github.com/AbuAbbasNaqvi/microservices-ecom.git']]
+]
     stage('Test') {
       steps {
         // Ensure the correct directory is being used (assuming package.json is in the root)
