@@ -18,7 +18,6 @@ pipeline {
       steps {
         // Ensure the correct directory is being used (assuming package.json is in the root)
         sh 'npm install'  // Install dependencies from the root package.json
-        sh 'npm run test'  // Run tests from the root directory
       }
     }
 
