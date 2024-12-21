@@ -4,9 +4,9 @@ pipeline {
   environment {
     DOCKER_REGISTRY = 'docker.io'
     DOCKER_ORG = 'abbasnaqvi'  // Your Docker Hub organization/username
-    REGISTRY_CREDS_ID = 'dockerhub-creds'  // Jenkins credentials ID
+    REGISTRY_CREDS_ID = 'dockerhub'  // Jenkins credentials ID
     SERVICES = 'cart,payment,request'
-    NOTIFICATION_EMAILS = 'your.email@example.com'  // Add your email
+    NOTIFICATION_EMAILS = 'abuabbasali786@gmail.com'  // Add your email
   }
 
   parameters {
