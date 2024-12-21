@@ -1,74 +1,39 @@
 pipeline {
   agent any
+  
   environment {
-    DOCKER_IMAGE = "abbasnaqvi/demo-micro-app:${build_version}"
-    REGISTRY_CREDENTIALS = credentials('dockerhub')  // Jenkins credentials ID for Docker Hub
-    DOCKER_REGISTRY = 'docker.io'  // Assuming you're using Docker Hub, change if using another registry
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_ORG = 'abbasnaqvi'
+    DOCKER_CREDENTIALS = credentials('dockerhub')  // Jenkins credentials ID
   }
+
   parameters {
-    string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version to use for Docker image')
+    string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version')
   }
+
   stages {
     stage('Checkout') {
       steps {
-        checkout scm: [
-          $class: 'GitSCM',
-          branches: [[name: '*/master']],
-          userRemoteConfigs: [[url: 'https://github.com/AbuAbbasNaqvi/microservices-ecom.git']]
-        ]
-      }
-    }
-
-    stage('Test') {
-      steps {
-        // Ensure the correct directory is being used (assuming package.json is in the root)
-        sh 'npm install'  // Install dependencies from the root package.json
+        checkout scm
       }
     }
 
     stage('Build and Push Docker Images') {
-      parallel {
-        stage('Cart Service') {
-          steps {
-            dir('services/cart') {
-              script {
-                def VERSION = params.build_version
-                def DOCKER_IMAGE_CART = "${DOCKER_REGISTRY}/cart-service:${VERSION}"
-                docker.build(DOCKER_IMAGE_CART)
-                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
-                  docker.image(DOCKER_IMAGE_CART).push()
-                }
-              }
-            }
-          }
-        }
-
-        stage('Payment Service') {
-          steps {
-            dir('services/payment') {
-              script {
-                def VERSION = params.build_version
-                def DOCKER_IMAGE_PAYMENT = "${DOCKER_REGISTRY}/payment-service:${VERSION}"
-                docker.build(DOCKER_IMAGE_PAYMENT)
-                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
-                  docker.image(DOCKER_IMAGE_PAYMENT).push()
-                }
-              }
-            }
-          }
-        }
-
-        stage('Request Service') {
-          steps {
-            dir('services/request') {
-              script {
-                def VERSION = params.build_version
-                def DOCKER_IMAGE_REQUEST = "${DOCKER_REGISTRY}/request-service:${VERSION}"
-                docker.build(DOCKER_IMAGE_REQUEST)
-                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
-                  docker.image(DOCKER_IMAGE_REQUEST).push()
-                }
-              }
+      steps {
+        script {
+          // Login to Docker Hub
+          sh """
+            echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin
+          """
+          
+          // Build and push services
+          ['cart', 'payment', 'request'].each { service ->
+            dir("services/${service}") {
+              def imageTag = "${DOCKER_ORG}/${service}-service:${params.build_version}"
+              sh """
+                docker build -t ${imageTag} .
+                docker push ${imageTag}
+              """
             }
           }
         }
@@ -82,9 +47,10 @@ pipeline {
             kubectl apply -f k8s/namespaces/
             kubectl apply -f k8s/config/
             kubectl apply -f k8s/services/
-            kubectl set image deployment/cart-service cart-service=${DOCKER_REGISTRY}/cart-service:${params.build_version} -n ecommerce
-            kubectl set image deployment/payment-service payment-service=${DOCKER_REGISTRY}/payment-service:${params.build_version} -n ecommerce
-            kubectl set image deployment/request-service request-service=${DOCKER_REGISTRY}/request-service:${params.build_version} -n ecommerce
+            
+            kubectl set image deployment/cart-service cart-service=${DOCKER_ORG}/cart-service:${params.build_version} -n ecommerce
+            kubectl set image deployment/payment-service payment-service=${DOCKER_ORG}/payment-service:${params.build_version} -n ecommerce
+            kubectl set image deployment/request-service request-service=${DOCKER_ORG}/request-service:${params.build_version} -n ecommerce
           """
         }
       }
@@ -92,14 +58,19 @@ pipeline {
   }
 
   post {
+    always {
+      sh 'docker logout'
+    }
     success {
       emailext(
         subject: "Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         body: """
-        The build and deployment process has completed successfully.
-        Job Name: ${env.JOB_NAME}
-        Build Number: ${env.BUILD_NUMBER}
+          Build completed successfully
+          Job: ${env.JOB_NAME}
+          Build Number: ${env.BUILD_NUMBER}
+          Build URL: ${env.BUILD_URL}
         """,
+        to: 'your.email@example.com',
         recipientProviders: [[$class: 'DevelopersRecipientProvider']]
       )
     }
@@ -107,11 +78,12 @@ pipeline {
       emailext(
         subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         body: """
-        The build and deployment process has failed.
-        Job Name: ${env.JOB_NAME}
-        Build Number: ${env.BUILD_NUMBER}
-        Please check the Jenkins logs for more details.
+          Build failed
+          Job: ${env.JOB_NAME}
+          Build Number: ${env.BUILD_NUMBER}
+          Build URL: ${env.BUILD_URL}
         """,
+        to: 'your.email@example.com',
         recipientProviders: [[$class: 'DevelopersRecipientProvider']]
       )
     }
