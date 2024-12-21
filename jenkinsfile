@@ -1,47 +1,119 @@
 pipeline {
   agent any
-  
   environment {
-    DOCKER_REGISTRY = 'docker.io'
-    DOCKER_ORG = 'abbasnaqvi'  // Your Docker Hub organization/username
-    REGISTRY_CREDS_ID = 'dockerhub'  // Jenkins credentials ID
-    SERVICES = 'cart,payment,request'
-    NOTIFICATION_EMAILS = 'abuabbasali786@gmail.com'  // Add your email
+    DOCKER_IMAGE = "abbasnaqvi/demo-micro-app:${build_version}"
+    REGISTRY_CREDENTIALS = credentials('dockerhub')  // Jenkins credentials ID for Docker Hub
+    DOCKER_REGISTRY = 'docker.io'  // Assuming you're using Docker Hub, change if using another registry
   }
-
   parameters {
-    string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version')
+    string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version to use for Docker image')
   }
-
   stages {
     stage('Checkout') {
       steps {
-        checkout scm
+        checkout scm: [
+          $class: 'GitSCM',
+          branches: [[name: '*/master']],
+          userRemoteConfigs: [[url: 'https://github.com/AbuAbbasNaqvi/microservices-ecom.git']]
+        ]
       }
     }
 
-    stage('Build & Push') {
+    stage('Test') {
       steps {
-        script {
-          buildStage()
+        // Ensure the correct directory is being used (assuming package.json is in the root)
+        sh 'npm install'  // Install dependencies from the root package.json
+      }
+    }
+
+    stage('Build and Push Docker Images') {
+      parallel {
+        stage('Cart Service') {
+          steps {
+            dir('services/cart') {
+              script {
+                def VERSION = params.build_version
+                def DOCKER_IMAGE_CART = "${DOCKER_REGISTRY}/cart-service:${VERSION}"
+                docker.build(DOCKER_IMAGE_CART)
+                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
+                  docker.image(DOCKER_IMAGE_CART).push()
+                }
+              }
+            }
+          }
+        }
+
+        stage('Payment Service') {
+          steps {
+            dir('services/payment') {
+              script {
+                def VERSION = params.build_version
+                def DOCKER_IMAGE_PAYMENT = "${DOCKER_REGISTRY}/payment-service:${VERSION}"
+                docker.build(DOCKER_IMAGE_PAYMENT)
+                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
+                  docker.image(DOCKER_IMAGE_PAYMENT).push()
+                }
+              }
+            }
+          }
+        }
+
+        stage('Request Service') {
+          steps {
+            dir('services/request') {
+              script {
+                def VERSION = params.build_version
+                def DOCKER_IMAGE_REQUEST = "${DOCKER_REGISTRY}/request-service:${VERSION}"
+                docker.build(DOCKER_IMAGE_REQUEST)
+                docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
+                  docker.image(DOCKER_IMAGE_REQUEST).push()
+                }
+              }
+            }
+          }
         }
       }
     }
 
-    stage('Deploy') {
+    stage('Deploy to Kubernetes') {
       steps {
         script {
-          deployStage()
+          sh """
+            kubectl apply -f k8s/namespaces/
+            kubectl apply -f k8s/config/
+            kubectl apply -f k8s/services/
+            kubectl set image deployment/cart-service cart-service=${DOCKER_REGISTRY}/cart-service:${params.build_version} -n ecommerce
+            kubectl set image deployment/payment-service payment-service=${DOCKER_REGISTRY}/payment-service:${params.build_version} -n ecommerce
+            kubectl set image deployment/request-service request-service=${DOCKER_REGISTRY}/request-service:${params.build_version} -n ecommerce
+          """
         }
       }
     }
   }
 
   post {
-    always {
-      script {
-        notifyStage(currentBuild.result)
-      }
+    success {
+      emailext(
+        subject: "Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """
+        The build and deployment process has completed successfully.
+        Job Name: ${env.JOB_NAME}
+        Build Number: ${env.BUILD_NUMBER}
+        """,
+        recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+      )
+    }
+    failure {
+      emailext(
+        subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """
+        The build and deployment process has failed.
+        Job Name: ${env.JOB_NAME}
+        Build Number: ${env.BUILD_NUMBER}
+        Please check the Jenkins logs for more details.
+        """,
+        recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+      )
     }
   }
 }
