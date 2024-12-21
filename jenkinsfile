@@ -3,8 +3,10 @@ pipeline {
   
   environment {
     DOCKER_REGISTRY = 'docker.io'
-    REGISTRY_CREDENTIALS = credentials('dockerhub')
-    SERVICES = 'cart,payment,request'  // Changed to string format
+    DOCKER_ORG = 'abbasnaqvi'  // Your Docker Hub organization/username
+    REGISTRY_CREDS_ID = 'dockerhub-creds'  // Jenkins credentials ID
+    SERVICES = 'cart,payment,request'
+    NOTIFICATION_EMAILS = 'your.email@example.com'  // Add your email
   }
 
   parameters {
@@ -18,10 +20,10 @@ pipeline {
       }
     }
 
-    stage('Build Services') {
+    stage('Build & Push') {
       steps {
         script {
-          buildServices()
+          buildStage()
         }
       }
     }
@@ -29,7 +31,7 @@ pipeline {
     stage('Deploy') {
       steps {
         script {
-          deployToKubernetes()
+          deployStage()
         }
       }
     }
@@ -38,52 +40,8 @@ pipeline {
   post {
     always {
       script {
-        sendNotification(currentBuild.result)
+        notifyStage(currentBuild.result)
       }
     }
   }
-}
-
-// Shared functions
-def buildServices() {
-  def serviceList = env.SERVICES.split(',')  // Split string into array
-  for (service in serviceList) {
-    dir("services/${service}") {
-      def imageTag = "${DOCKER_REGISTRY}/${service}-service:${params.build_version}"
-      docker.build(imageTag)
-      docker.withRegistry("https://${DOCKER_REGISTRY}", REGISTRY_CREDENTIALS) {
-        docker.image(imageTag).push()
-      }
-    }
-  }
-}
-
-def deployToKubernetes() {
-  sh """
-    kubectl apply -f k8s/namespaces/
-    kubectl apply -f k8s/config/
-    kubectl apply -f k8s/services/
-  """
-  
-  def serviceList = env.SERVICES.split(',')
-  for (service in serviceList) {
-    sh """
-      kubectl set image deployment/${service}-service ${service}-service=${DOCKER_REGISTRY}/${service}-service:${params.build_version} -n ecommerce
-    """
-  }
-}
-
-def sendNotification(buildStatus) {
-  def subject = "${buildStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-  def body = """
-    Build: ${env.JOB_NAME} #${env.BUILD_NUMBER}
-    Status: ${buildStatus}
-    Details: ${env.BUILD_URL}
-  """
-  
-  emailext(
-    subject: subject,
-    body: body,
-    recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-  )
 }
