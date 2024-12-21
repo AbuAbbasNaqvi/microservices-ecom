@@ -4,7 +4,7 @@ pipeline {
   environment {
     DOCKER_REGISTRY = 'docker.io'
     REGISTRY_CREDENTIALS = credentials('dockerhub')
-    SERVICES = ['cart', 'payment', 'request']
+    SERVICES = 'cart,payment,request'  // Changed to string format
   }
 
   parameters {
@@ -46,7 +46,8 @@ pipeline {
 
 // Shared functions
 def buildServices() {
-  for (service in env.SERVICES) {
+  def serviceList = env.SERVICES.split(',')  // Split string into array
+  for (service in serviceList) {
     dir("services/${service}") {
       def imageTag = "${DOCKER_REGISTRY}/${service}-service:${params.build_version}"
       docker.build(imageTag)
@@ -64,7 +65,8 @@ def deployToKubernetes() {
     kubectl apply -f k8s/services/
   """
   
-  for (service in env.SERVICES) {
+  def serviceList = env.SERVICES.split(',')
+  for (service in serviceList) {
     sh """
       kubectl set image deployment/${service}-service ${service}-service=${DOCKER_REGISTRY}/${service}-service:${params.build_version} -n ecommerce
     """
