@@ -1,11 +1,10 @@
-#!/usr/bin/env groovy
-
 pipeline {
     agent any
     
     environment {
         DOCKER_REGISTRY = 'docker.io'
         DOCKER_ORG = 'abbasnaqvi'
+        DOCKER_CREDENTIALS = credentials('dockerhub')
     }
 
     parameters {
@@ -21,9 +20,9 @@ pipeline {
 
         stage('Docker Login') {
             steps {
-                script {
-                    dockerUtils.login('dockerhub')
-                }
+                sh """
+                    echo \${DOCKER_CREDENTIALS_PSW} | docker login -u \${DOCKER_CREDENTIALS_USR} --password-stdin
+                """
             }
         }
 
@@ -34,24 +33,27 @@ pipeline {
                     
                     for (service in services) {
                         dir("services/${service}") {
-                            dockerUtils.buildAndPush(service, params.build_version, env.DOCKER_ORG)
+                            def imageTag = "${DOCKER_ORG}/${service}-service:${params.build_version}"
+                            sh """
+                                docker build -t ${imageTag} .
+                                docker push ${imageTag}
+                            """
                         }
                     }
                 }
             }
         }
 
-        stage('Configure Kubernetes') {
-            steps {
-                script {
-                    kubeUtils.setupConfig('kubernetes-config')
-                }
-            }
-        }
-
         stage('Deploy to Kubernetes') {
+            environment {
+                KUBECONFIG = credentials('kubernetes-config')
+            }
             steps {
                 sh """
+                    mkdir -p ~/.kube
+                    cp \${KUBECONFIG} ~/.kube/config
+                    chmod 600 ~/.kube/config
+                    
                     kubectl apply -f k8s/namespaces/
                     kubectl apply -f k8s/config/
                     kubectl apply -f k8s/services/
@@ -60,7 +62,9 @@ pipeline {
                 script {
                     def services = ['cart', 'payment', 'request']
                     for (service in services) {
-                        kubeUtils.deploy(service, params.build_version, env.DOCKER_ORG)
+                        sh """
+                            kubectl set image deployment/${service}-service ${service}-service=${DOCKER_ORG}/${service}-service:${params.build_version} -n ecommerce
+                        """
                     }
                 }
             }
@@ -69,22 +73,34 @@ pipeline {
 
     post {
         always {
-            node('any') {
-                script {
-                    dockerUtils.logout()
-                    kubeUtils.cleanup()
-                }
-            }
+            sh 'docker logout'
+            sh 'rm -f ~/.kube/config || true'
         }
         success {
-            script {
-                notificationUtils.sendBuildNotification('Success')
-            }
+            emailext(
+                subject: "Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    Build completed successfully
+                    Job: ${env.JOB_NAME}
+                    Build Number: ${env.BUILD_NUMBER}
+                    Build URL: ${env.BUILD_URL}
+                """,
+                to: 'team@example.com',
+                recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+            )
         }
         failure {
-            script {
-                notificationUtils.sendBuildNotification('Failed')
-            }
+            emailext(
+                subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    Build failed
+                    Job: ${env.JOB_NAME}
+                    Build Number: ${env.BUILD_NUMBER}
+                    Build URL: ${env.BUILD_URL}
+                """,
+                to: 'team@example.com',
+                recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+            )
         }
     }
 }
