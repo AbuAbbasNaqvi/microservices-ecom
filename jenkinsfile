@@ -1,8 +1,5 @@
 #!/usr/bin/env groovy
 
-// Load shared library
-def lib = load 'jenkins/config/pipeline-libraries.groovy'
-
 pipeline {
     agent any
     
@@ -18,6 +15,15 @@ pipeline {
     }
 
     stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    // Ensure the shared library is loaded within a node context
+                    lib = load 'jenkins/config/pipeline-libraries.groovy'
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
