@@ -85,7 +85,7 @@ pipeline {
                     Build Number: ${env.BUILD_NUMBER}
                     Build URL: ${env.BUILD_URL}
                 """,
-                to: 'team@example.com',
+                to: 'abuabbasali786@gmail.com',
                 recipientProviders: [[$class: 'DevelopersRecipientProvider']]
             )
         }
@@ -98,7 +98,7 @@ pipeline {
                     Build Number: ${env.BUILD_NUMBER}
                     Build URL: ${env.BUILD_URL}
                 """,
-                to: 'team@example.com',
+                to: 'abuabbasali786@gmail.com',
                 recipientProviders: [[$class: 'DevelopersRecipientProvider']]
             )
         }
