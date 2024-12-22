@@ -12,7 +12,7 @@ def sendBuildNotification(String status) {
     emailext(
         subject: subject,
         body: body,
-        to: env.EMAIL_RECIPIENTS ?: 'team@example.com',
+        to: env.EMAIL_RECIPIENTS ?: 'abuabbasali786@gmail.com',
         recipientProviders: [[$class: 'DevelopersRecipientProvider']]
     )
 }
