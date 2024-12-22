@@ -55,6 +55,7 @@ pipeline {
         always {
             sh 'docker logout'
         }
+    }
         post {
        failure {
              emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
