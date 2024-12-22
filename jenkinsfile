@@ -18,6 +18,12 @@ pipeline {
             }
         }
 
+        stage('Build') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
         stage('Docker Login') {
             steps {
                 sh """
@@ -43,38 +49,11 @@ pipeline {
                 }
             }
         }
-
-        stage('Deploy to Kubernetes') {
-            environment {
-                KUBECONFIG = credentials('kubernetes-config')
-            }
-            steps {
-                sh """
-                    mkdir -p ~/.kube
-                    cp \${KUBECONFIG} ~/.kube/config
-                    chmod 600 ~/.kube/config
-                    
-                    kubectl apply -f k8s/namespaces/
-                    kubectl apply -f k8s/config/
-                    kubectl apply -f k8s/services/
-                """
-                
-                script {
-                    def services = ['cart', 'payment', 'request']
-                    for (service in services) {
-                        sh """
-                            kubectl set image deployment/${service}-service ${service}-service=${DOCKER_ORG}/${service}-service:${params.build_version} -n ecommerce
-                        """
-                    }
-                }
-            }
-        }
     }
 
     post {
         always {
             sh 'docker logout'
-            sh 'rm -f ~/.kube/config || true'
         }
         success {
             emailext(
