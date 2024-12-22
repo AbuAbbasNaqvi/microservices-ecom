@@ -55,31 +55,17 @@ pipeline {
         always {
             sh 'docker logout'
         }
-        success {
-            emailext(
-                subject: "Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    Build completed successfully
-                    Job: ${env.JOB_NAME}
-                    Build Number: ${env.BUILD_NUMBER}
-                    Build URL: ${env.BUILD_URL}
-                """,
-                to: 'abuabbasali786@gmail.com',
-                recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-            )
-        }
-        failure {
-            emailext(
-                subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    Build failed
-                    Job: ${env.JOB_NAME}
-                    Build Number: ${env.BUILD_NUMBER}
-                    Build URL: ${env.BUILD_URL}
-                """,
-                to: 'abuabbasali786@gmail.com',
-                recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-            )
-        }
-    }
+        post {
+       failure {
+             emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
+                      subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Failed", 
+                      mimeType: 'text/html',to: "ashfaque.s510@gmail.com"
+      }
+      success {
+            emailext body: '''${SCRIPT, template="groovy-html.template"}''', 
+                     subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Successful", 
+                     mimeType: 'text/html',to: "ashfaque.s510@gmail.com"
+      }      
+   }
 }
+
